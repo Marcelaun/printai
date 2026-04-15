@@ -211,13 +211,22 @@ const ChatArea: React.FC<ChatAreaProps> = ({ lead, onStatusChange, onAssumeLead,
                         
                         <div className="flex items-end justify-between">
                           <div>
-                            {produto.desconto ? (
-                              <>
-                                <p className="text-[10px] text-slate-400 line-through">R$ {Number(produto.preco).toFixed(2)}</p>
-                                <p className="text-lg font-black text-emerald-600">R$ {Number(produto.desconto).toFixed(2)}</p>
-                              </>
+                            {produto.tipo_calculo === 'Fixo' ? (
+                              // Se for Fixo, mostra o Preço ou o Desconto
+                              produto.desconto ? (
+                                <>
+                                  <p className="text-[10px] text-slate-400 line-through">R$ {Number(produto.preco).toFixed(2)}</p>
+                                  <p className="text-lg font-black text-emerald-600">R$ {Number(produto.desconto).toFixed(2)}</p>
+                                </>
+                              ) : (
+                                <p className="text-lg font-black text-indigo-700">R$ {Number(produto.preco).toFixed(2)}</p>
+                              )
                             ) : (
-                              <p className="text-lg font-black text-indigo-700">R$ {Number(produto.preco).toFixed(2)}</p>
+                              // Se for Dinâmico, mostra o Custo Base e avisa o vendedor
+                              <>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Custo Base</p>
+                                <p className="text-lg font-black text-slate-700">R$ {Number(produto.custo_base).toFixed(2)}</p>
+                              </>
                             )}
                           </div>
                           <button className="bg-slate-100 hover:bg-indigo-600 text-slate-600 hover:text-white p-2 rounded-lg transition-colors" title="Adicionar ao Orçamento">
