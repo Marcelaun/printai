@@ -4,12 +4,14 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendCopilotMessage } from '../../services/api';
+import { supabase } from '../../lib/supabase'; // <-- Importamos o Supabase
 import type { Lead } from '../../types/index';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   tab: 'cliente' | 'vendedor';
+  isHistory?: boolean; // <-- Nova flag para saber se a mensagem veio do passado
 }
 
 interface AiCopilotPanelProps {
@@ -28,10 +30,16 @@ const extractText = (children: any): string => {
 };
 
 // --- COMPONENTE MÁGICO: EFEITO MÁQUINA DE ESCREVER + BOTÃO WHATSAPP ---
-const TypewriterMarkdown = ({ content, leadPhone }: { content: string, leadPhone: string }) => {
-  const [displayedText, setDisplayedText] = useState('');
+// Adicionamos o isHistory para não dar o efeito de digitar nas mensagens antigas
+const TypewriterMarkdown = ({ content, leadPhone, isHistory }: { content: string, leadPhone: string, isHistory?: boolean }) => {
+  const [displayedText, setDisplayedText] = useState(isHistory ? content : '');
 
   useEffect(() => {
+    if (isHistory) {
+      setDisplayedText(content);
+      return;
+    }
+
     let index = 0;
     const speed = 10;
     
@@ -42,7 +50,7 @@ const TypewriterMarkdown = ({ content, leadPhone }: { content: string, leadPhone
     }, speed);
 
     return () => clearInterval(interval);
-  }, [content]);
+  }, [content, isHistory]);
 
   return (
     <ReactMarkdown
@@ -58,11 +66,8 @@ const TypewriterMarkdown = ({ content, leadPhone }: { content: string, leadPhone
           const rawText = extractText(children);
           
           const handleSendWa = () => {
-            // Limpa o telefone deixando só os números
             const phone = leadPhone ? leadPhone.replace(/\D/g, '') : '';
-            // Garante que tem o código do Brasil (55) na frente
             const numeroFinal = phone.startsWith('55') ? phone : `55${phone}`;
-            // Monta a URL oficial do WhatsApp com o texto preenchido
             const url = `https://wa.me/${numeroFinal}?text=${encodeURIComponent(rawText.trim())}`;
             window.open(url, '_blank');
           };
@@ -95,6 +100,53 @@ const AiCopilotPanel: React.FC<AiCopilotPanelProps> = ({ activeLead }) => {
   const [activeTab, setActiveTab] = useState<'cliente' | 'vendedor'>('cliente');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false); // <-- Estado pro loading do banco
+
+  // Pega os dados do vendedor logado
+  const userProfile = JSON.parse(localStorage.getItem('printia_user_profile') || '{}');
+
+  // =========================================================================
+  // NOVO: BUSCAR HISTÓRICO NO BANCO QUANDO O CLIENTE MUDA
+  // =========================================================================
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (!activeLead?.id || !userProfile.cpf) {
+        setMessages([]);
+        return;
+      }
+
+      setIsLoadingHistory(true);
+      try {
+        const { data, error } = await supabase
+          .from('copilot_historico')
+          .select('role, content, tab')
+          .eq('orcamento_id', activeLead.id)
+          .eq('vendedor_cpf', userProfile.cpf) // Filtra pelo vendedor logado
+          .order('criado_em', { ascending: true });
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          const formattedHistory: Message[] = data.map(msg => ({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+            tab: msg.tab as 'cliente' | 'vendedor',
+            isHistory: true
+          }));
+          setMessages(formattedHistory);
+        } else {
+          setMessages([]);
+        }
+      } catch (err) {
+        console.error("Erro ao puxar histórico da IA:", err);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    fetchHistory();
+  }, [activeLead?.id, userProfile.cpf]);
+  // =========================================================================
 
   const handleSendMessage = async () => {
     if (!chatInput.trim() || !activeLead || isLoading) return;
@@ -105,7 +157,8 @@ const AiCopilotPanel: React.FC<AiCopilotPanelProps> = ({ activeLead }) => {
     setIsLoading(true);
 
     try {
-      const reply = await sendCopilotMessage(activeLead, chatInput, activeTab);
+      // Passamos o userProfile para a API (lembre-se de ajustar a sendCopilotMessage se necessário)
+      const reply = await sendCopilotMessage(activeLead, chatInput, activeTab, userProfile);
       const assistantMessage: Message = { role: 'assistant', content: reply, tab: activeTab };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
@@ -136,7 +189,7 @@ const AiCopilotPanel: React.FC<AiCopilotPanelProps> = ({ activeLead }) => {
   }
 
   return (
-    <aside className="w-[585px] bg-white border-l border-slate-200 flex flex-col h-full overflow-hidden shrink-0 font-sans shadow-sm">
+    <aside className="w-full bg-white border-l border-slate-200 flex flex-col h-full overflow-hidden shrink-0 font-sans shadow-sm">
       
       {/* HEADER IA */}
       <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between shrink-0">
@@ -148,7 +201,9 @@ const AiCopilotPanel: React.FC<AiCopilotPanelProps> = ({ activeLead }) => {
             <h2 className="font-bold text-sm text-slate-800 tracking-tight">PrintIA Copilot</h2>
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Online</p>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Online • {userProfile.name?.split(' ')[0]}
+              </p>
             </div>
           </div>
         </div>
@@ -183,46 +238,55 @@ const AiCopilotPanel: React.FC<AiCopilotPanelProps> = ({ activeLead }) => {
       {/* ÁREA DE CONTEÚDO DINÂMICA */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30 scroll-smooth">
         
-        {currentMessages.length === 0 && (
-          <div className="flex gap-3 animate-in fade-in duration-500">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${
-              activeTab === 'cliente' ? 'bg-amber-50 border-amber-100' : 'bg-indigo-50 border-indigo-100'
-            }`}>
-              {activeTab === 'cliente' ? <Zap size={16} className="text-amber-600 fill-amber-600" /> : <Bot size={16} className="text-indigo-600" />}
-            </div>
-            <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-none p-4 shadow-sm">
-              <p className="text-xs text-slate-600 leading-relaxed">
-                {activeTab === 'cliente' 
-                  ? `Cole abaixo o que a ${activeLead.empresa} te respondeu no WhatsApp. Vou analisar a intenção e gerar 3 opções estratégicas de resposta.`
-                  : `Olá! Sou o seu parceiro estratégico. Vamos destrinchar os dados da ${activeLead.empresa} para garantir esse fechamento?`}
-              </p>
-            </div>
+        {isLoadingHistory ? (
+          <div className="flex items-center justify-center h-full flex-col gap-3 text-slate-400 animate-pulse">
+            <Loader2 className="animate-spin" size={24} />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Sincronizando Memória...</span>
           </div>
-        )}
+        ) : (
+          <>
+            {currentMessages.length === 0 && (
+              <div className="flex gap-3 animate-in fade-in duration-500">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${
+                  activeTab === 'cliente' ? 'bg-amber-50 border-amber-100' : 'bg-indigo-50 border-indigo-100'
+                }`}>
+                  {activeTab === 'cliente' ? <Zap size={16} className="text-amber-600 fill-amber-600" /> : <Bot size={16} className="text-indigo-600" />}
+                </div>
+                <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-none p-4 shadow-sm">
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    {activeTab === 'cliente' 
+                      ? `Cole abaixo o que a ${activeLead.empresa} te respondeu no WhatsApp. Vou analisar a intenção e gerar 3 opções estratégicas de resposta.`
+                      : `Olá! Sou o seu parceiro estratégico. Vamos destrinchar os dados da ${activeLead.empresa} para garantir esse fechamento?`}
+                  </p>
+                </div>
+              </div>
+            )}
 
-        {currentMessages.map((msg, index) => (
-          <div key={index} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${
-              msg.role === 'user' 
-                ? 'bg-slate-100 border-slate-200' 
-                : (activeTab === 'cliente' ? 'bg-amber-50 border-amber-100' : 'bg-indigo-50 border-indigo-100')
-            }`}>
-              {msg.role === 'user' ? <UserCircle size={16} className="text-slate-500" /> : (activeTab === 'cliente' ? <Zap size={16} className="text-amber-600 fill-amber-600" /> : <Bot size={16} className="text-indigo-600" />)}
-            </div>
-            
-            <div className={`max-w-[85%] border p-5 shadow-sm rounded-3xl ${
-              msg.role === 'user' 
-                ? 'bg-indigo-600 border-indigo-700 text-white rounded-tr-none' 
-                : 'bg-white border-slate-100 text-slate-800 rounded-tl-none shadow-xl shadow-indigo-900/5'
-            }`}>
-              {msg.role === 'user' ? (
-                <p className="text-xs leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
-              ) : (
-                <TypewriterMarkdown content={msg.content} leadPhone={activeLead.telefone || ''} />
-              )}
-            </div>
-          </div>
-        ))}
+            {currentMessages.map((msg, index) => (
+              <div key={index} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${
+                  msg.role === 'user' 
+                    ? 'bg-slate-100 border-slate-200' 
+                    : (activeTab === 'cliente' ? 'bg-amber-50 border-amber-100' : 'bg-indigo-50 border-indigo-100')
+                }`}>
+                  {msg.role === 'user' ? <UserCircle size={16} className="text-slate-500" /> : (activeTab === 'cliente' ? <Zap size={16} className="text-amber-600 fill-amber-600" /> : <Bot size={16} className="text-indigo-600" />)}
+                </div>
+                
+                <div className={`max-w-[85%] border p-5 shadow-sm rounded-3xl ${
+                  msg.role === 'user' 
+                    ? 'bg-indigo-600 border-indigo-700 text-white rounded-tr-none' 
+                    : 'bg-white border-slate-100 text-slate-800 rounded-tl-none shadow-xl shadow-indigo-900/5'
+                }`}>
+                  {msg.role === 'user' ? (
+                    <p className="text-xs leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
+                  ) : (
+                    <TypewriterMarkdown content={msg.content} leadPhone={activeLead.telefone || ''} isHistory={msg.isHistory} />
+                  )}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
 
         {isLoading && (
           <div className="flex gap-3 animate-pulse">

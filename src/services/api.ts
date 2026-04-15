@@ -8,12 +8,15 @@ export const getLeads = async (): Promise<Lead[]> => {
   return res.json();
 };
 
-export const sendCopilotMessage = async (lead: Lead, message: string, mode: 'cliente' | 'vendedor') => {
+// Adicionamos o parâmetro "vendedor" aqui
+export const sendCopilotMessage = async (lead: Lead, message: string, mode: 'cliente' | 'vendedor', vendedor?: any) => {
   const res = await fetch(`${API_URL}/copilot`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lead, message, mode })
+    // Agora o vendedor viaja junto no corpo da requisição!
+    body: JSON.stringify({ lead, message, mode, vendedor }) 
   });
+  
   if (!res.ok) throw new Error('Erro no Copilot');
   const data = await res.json();
   return data.reply;
