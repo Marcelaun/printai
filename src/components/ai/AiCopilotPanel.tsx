@@ -1,121 +1,273 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Bot, 
-  Sparkles, 
-  Loader2, 
-  TrendingUp, 
-  Lightbulb, 
-  MessageSquare, 
-  Send, 
-  Share2 
+  Sparkles, Send, Bot, MessageSquare, Zap, UserCircle, Loader2 
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { sendCopilotMessage } from '../../services/api';
 import type { Lead } from '../../types/index';
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  tab: 'cliente' | 'vendedor';
+}
 
 interface AiCopilotPanelProps {
   activeLead: Lead | null;
 }
 
-type AiStatus = 'idle' | 'loading' | 'suggestion';
+// Utilitário para extrair texto puro dos elementos HTML gerados pelo Markdown
+const extractText = (children: any): string => {
+  if (typeof children === 'string') return children;
+  if (typeof children === 'number') return children.toString();
+  if (Array.isArray(children)) return children.map(extractText).join('');
+  if (children && children.props && children.props.children) {
+    return extractText(children.props.children);
+  }
+  return '';
+};
 
-const AiCopilotPanel: React.FC<AiCopilotPanelProps> = ({ activeLead }) => {
-  const [status, setStatus] = useState<AiStatus>('idle');
+// --- COMPONENTE MÁGICO: EFEITO MÁQUINA DE ESCREVER + BOTÃO WHATSAPP ---
+const TypewriterMarkdown = ({ content, leadPhone }: { content: string, leadPhone: string }) => {
+  const [displayedText, setDisplayedText] = useState('');
 
   useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout>;
+    let index = 0;
+    const speed = 10;
+    
+    const interval = setInterval(() => {
+      setDisplayedText(content.substring(0, index));
+      index++;
+      if (index > content.length) clearInterval(interval);
+    }, speed);
 
-    if (activeLead && activeLead.history.length === 0) {
-      setStatus('loading');
-      timeoutId = setTimeout(() => {
-        setStatus('suggestion');
-      }, 2000);
-    } else {
-      setStatus('idle');
-    }
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [activeLead]);
+    return () => clearInterval(interval);
+  }, [content]);
 
   return (
-    <aside className="w-1/3 min-w-[300px] bg-slate-50 border-l border-slate-200 flex flex-col h-full overflow-hidden">
-      {/* Header */}
-      <div className="p-4 border-b border-slate-200 bg-white flex items-center gap-2 shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
-          <Bot size={20} />
+    <ReactMarkdown
+      components={{
+        h3: ({node, ...props}) => <h3 className="text-sm font-black text-indigo-900 mt-5 mb-2 uppercase tracking-widest border-b border-indigo-100 pb-1" {...props} />,
+        strong: ({node, ...props}) => <strong className="font-black text-indigo-700 bg-indigo-50 px-1 rounded" {...props} />,
+        p: ({node, ...props}) => <p className="mb-4 text-[13px] text-slate-700 leading-relaxed" {...props} />,
+        ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-2 text-[13px] text-slate-700" {...props} />,
+        li: ({node, ...props}) => <li className="pl-1" {...props} />,
+        
+        // AQUI ESTÁ A MÁGICA: Hackeando o Blockquote para virar o card do WhatsApp
+        blockquote: ({node, children, ...props}) => {
+          const rawText = extractText(children);
+          
+          const handleSendWa = () => {
+            // Limpa o telefone deixando só os números
+            const phone = leadPhone ? leadPhone.replace(/\D/g, '') : '';
+            // Garante que tem o código do Brasil (55) na frente
+            const numeroFinal = phone.startsWith('55') ? phone : `55${phone}`;
+            // Monta a URL oficial do WhatsApp com o texto preenchido
+            const url = `https://wa.me/${numeroFinal}?text=${encodeURIComponent(rawText.trim())}`;
+            window.open(url, '_blank');
+          };
+
+          return (
+            <div className="relative group my-4">
+              <blockquote className="border-l-4 border-emerald-400 bg-emerald-50 text-emerald-900 p-4 rounded-r-xl italic font-medium shadow-inner pr-14" {...props}>
+                {children}
+              </blockquote>
+              <button 
+                onClick={handleSendWa}
+                title="Enviar direto para o WhatsApp"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-md scale-90 group-hover:scale-100 z-10 cursor-pointer"
+              >
+                <Send size={15} className="ml-0.5" />
+              </button>
+            </div>
+          );
+        }
+      }}
+    >
+      {displayedText}
+    </ReactMarkdown>
+  );
+};
+// ----------------------------------------------------------------
+
+const AiCopilotPanel: React.FC<AiCopilotPanelProps> = ({ activeLead }) => {
+  const [chatInput, setChatInput] = useState('');
+  const [activeTab, setActiveTab] = useState<'cliente' | 'vendedor'>('cliente');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || !activeLead || isLoading) return;
+
+    const userMessage: Message = { role: 'user', content: chatInput, tab: activeTab };
+    setMessages(prev => [...prev, userMessage]);
+    setChatInput('');
+    setIsLoading(true);
+
+    try {
+      const reply = await sendCopilotMessage(activeLead, chatInput, activeTab);
+      const assistantMessage: Message = { role: 'assistant', content: reply, tab: activeTab };
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Erro ao chamar o Copilot:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Desculpe, ocorreu um erro de conexão com o cérebro da PrintIA.',
+        tab: activeTab
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const currentMessages = messages.filter(m => m.tab === activeTab);
+
+  if (!activeLead) {
+    return (
+      <aside className="w-80 bg-slate-50 border-l border-slate-200 flex flex-col h-full items-center justify-center p-8 text-center text-slate-400 font-sans shrink-0">
+        <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4 shadow-sm">
+          <Bot size={32} strokeWidth={1.5} className="opacity-20" />
         </div>
-        <h2 className="font-bold text-slate-800 tracking-tight">PrintIA Copilot</h2>
+        <p className="text-[10px] font-bold uppercase tracking-widest leading-relaxed">
+          Selecione um cliente para<br/>ativar o Copilot
+        </p>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="w-[585px] bg-white border-l border-slate-200 flex flex-col h-full overflow-hidden shrink-0 font-sans shadow-sm">
+      
+      {/* HEADER IA */}
+      <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-md shadow-indigo-100">
+            <Sparkles size={16} className="text-white" />
+          </div>
+          <div>
+            <h2 className="font-bold text-sm text-slate-800 tracking-tight">PrintIA Copilot</h2>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Online</p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Content Area */}
-      <div className="flex-1 overflow-y-auto">
-        {status === 'idle' && (
-          <div className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-400">
-            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-              <Sparkles size={32} strokeWidth={1.5} />
+      {/* SELETOR DE ABAS */}
+      <div className="p-2 bg-slate-50 border-b border-slate-100 flex gap-1 shrink-0">
+        <button 
+          onClick={() => setActiveTab('cliente')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+            activeTab === 'cliente' 
+              ? 'bg-white text-indigo-600 shadow-sm border border-slate-200' 
+              : 'text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <Zap size={12} className={activeTab === 'cliente' ? 'fill-indigo-600' : ''} />
+          Análise Cliente
+        </button>
+        <button 
+          onClick={() => setActiveTab('vendedor')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+            activeTab === 'vendedor' 
+              ? 'bg-white text-indigo-600 shadow-sm border border-slate-200' 
+              : 'text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <UserCircle size={12} />
+          Chat Vendedor
+        </button>
+      </div>
+
+      {/* ÁREA DE CONTEÚDO DINÂMICA */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30 scroll-smooth">
+        
+        {currentMessages.length === 0 && (
+          <div className="flex gap-3 animate-in fade-in duration-500">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${
+              activeTab === 'cliente' ? 'bg-amber-50 border-amber-100' : 'bg-indigo-50 border-indigo-100'
+            }`}>
+              {activeTab === 'cliente' ? <Zap size={16} className="text-amber-600 fill-amber-600" /> : <Bot size={16} className="text-indigo-600" />}
             </div>
-            <p className="text-sm font-medium leading-relaxed">
-              Selecione um lead sem histórico para gerar uma estratégia de venda.
-            </p>
-          </div>
-        )}
-
-        {status === 'loading' && (
-          <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-            <Loader2 size={40} className="text-indigo-600 animate-spin mb-4" />
-            <p className="text-sm font-semibold text-slate-600 animate-pulse">
-              Formulando estratégia e gatilhos...
-            </p>
-          </div>
-        )}
-
-        {status === 'suggestion' && activeLead && (
-          <div className="p-4 flex flex-col gap-4">
-            {/* Card 1: Visão de Mercado */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3 text-indigo-600">
-                <TrendingUp size={18} />
-                <h3 className="font-bold text-sm uppercase tracking-wider">Visão de Mercado</h3>
-              </div>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                A empresa <span className="font-semibold">{activeLead.empresa}</span> possui um capital social estimado em <span className="text-indigo-600 font-bold">{activeLead.enriched.capital}</span>. 
-                Isso sugere um potencial de compra de alto volume para materiais gráficos premium e fidelização a longo prazo.
+            <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-none p-4 shadow-sm">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                {activeTab === 'cliente' 
+                  ? `Cole abaixo o que a ${activeLead.empresa} te respondeu no WhatsApp. Vou analisar a intenção e gerar 3 opções estratégicas de resposta.`
+                  : `Olá! Sou o seu parceiro estratégico. Vamos destrinchar os dados da ${activeLead.empresa} para garantir esse fechamento?`}
               </p>
             </div>
+          </div>
+        )}
 
-            {/* Card 2: Dica Estratégica */}
-            <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3 text-amber-700">
-                <Lightbulb size={18} />
-                <h3 className="font-bold text-sm uppercase tracking-wider">Dica Estratégica</h3>
-              </div>
-              <p className="text-sm text-amber-900 leading-relaxed">
-                Utilize o gatilho de <span className="font-bold">exclusividade</span>. Mencione que, devido ao porte da empresa, vocês podem oferecer um acabamento em verniz localizado sem custo adicional no primeiro lote de 5000 unidades.
-              </p>
+        {currentMessages.map((msg, index) => (
+          <div key={index} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${
+              msg.role === 'user' 
+                ? 'bg-slate-100 border-slate-200' 
+                : (activeTab === 'cliente' ? 'bg-amber-50 border-amber-100' : 'bg-indigo-50 border-indigo-100')
+            }`}>
+              {msg.role === 'user' ? <UserCircle size={16} className="text-slate-500" /> : (activeTab === 'cliente' ? <Zap size={16} className="text-amber-600 fill-amber-600" /> : <Bot size={16} className="text-indigo-600" />)}
             </div>
+            
+            <div className={`max-w-[85%] border p-5 shadow-sm rounded-3xl ${
+              msg.role === 'user' 
+                ? 'bg-indigo-600 border-indigo-700 text-white rounded-tr-none' 
+                : 'bg-white border-slate-100 text-slate-800 rounded-tl-none shadow-xl shadow-indigo-900/5'
+            }`}>
+              {msg.role === 'user' ? (
+                <p className="text-xs leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
+              ) : (
+                <TypewriterMarkdown content={msg.content} leadPhone={activeLead.telefone || ''} />
+              )}
+            </div>
+          </div>
+        ))}
 
-            {/* Card 3: Mensagem Sugerida */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col gap-4">
-              <div className="flex items-center gap-2 text-indigo-600">
-                <MessageSquare size={18} />
-                <h3 className="font-bold text-sm uppercase tracking-wider">Mensagem Sugerida</h3>
-              </div>
-              <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-700 italic border-l-4 border-indigo-400">
-                "Olá {activeLead.name.split(' ')[0]}, vi que a {activeLead.empresa} está expandindo! 🚀 Para acompanhar esse crescimento, preparei uma proposta especial para os panfletos com um acabamento premium cortesia. Podemos fechar?"
-              </div>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <button className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-3 rounded-lg transition-colors">
-                  <Send size={14} />
-                  Aplicar no Chat
-                </button>
-                <button className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 px-3 rounded-lg transition-colors">
-                  <Share2 size={14} />
-                  WhatsApp
-                </button>
+        {isLoading && (
+          <div className="flex gap-3 animate-pulse">
+            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200">
+              <Loader2 size={16} className="text-indigo-600 animate-spin" />
+            </div>
+            <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-none p-5 shadow-sm flex items-center h-12">
+              <div className="flex gap-1.5">
+                <div className="w-2 h-2 bg-indigo-300 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-indigo-300 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                <div className="w-2 h-2 bg-indigo-300 rounded-full animate-bounce [animation-delay:0.4s]"></div>
               </div>
             </div>
           </div>
         )}
+      </div>
+
+      {/* FOOTER: INPUT DE CHAT */}
+      <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+        <div className="relative">
+          <textarea 
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
+            placeholder={activeTab === 'cliente' ? "Cole a resposta do cliente aqui..." : "Ex: Gere um briefing da empresa..."}
+            className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-5 pr-14 py-4 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none h-24 placeholder:text-slate-400 shadow-inner"
+            disabled={isLoading}
+          ></textarea>
+          <button 
+            onClick={handleSendMessage}
+            className={`absolute right-3 bottom-3 w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+              chatInput.trim() && !isLoading
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-300 hover:scale-105 active:scale-95' 
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            }`}
+            disabled={!chatInput.trim() || isLoading}
+          >
+            {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className="ml-1" />}
+          </button>
+        </div>
       </div>
     </aside>
   );

@@ -32,6 +32,7 @@ export interface Lead {
   observacoes: string;
   vendedor: string;
   status: LeadStatus;
+  atendido_por?: string | null;
   enriched: {
     capital: string;
     fundacao: string;

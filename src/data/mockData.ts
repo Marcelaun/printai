@@ -8,63 +8,111 @@ export const mockLeads: Lead[] = [
     empresa: "SDG gráfica",
     cpf_cnpj: "70219798605",
     telefone: "33997054462",
-    email: "guilherme@sdggrafica.com.br",
-    endereco: "Rua das Flores, 123 - Centro",
+    email: "guilhermealcantaraferreira@gmail.com",
+    endereco: "Rua Hélio Ferreira Flores",
     itens: [
-      { 
-        produto: "Panfletos Couché 90g", 
-        descricao: "5000 unidades, 4/0 cores, refile", 
-        preco_concorrente: "R$ 180,00" 
-      }
+      { produto: "Cartão", descricao: "1000", preco_concorrente: "200" }
     ],
-    probabilidade: 85,
-    observacoes: "Cliente solicitou urgência para evento no final de semana.",
-    vendedor: "Marcelo Almeida",
+    probabilidade: 7,
+    observacoes: "O concorrente demora",
+    vendedor: "Marcelo Almeida Barbosa",
     status: 'aguardando',
     enriched: {
       capital: "R$ 50.000,00",
-      fundacao: "10/05/2015"
+      fundacao: "Aprox. 4 anos"
     },
-    historico_compras: [
-      {
-        data: "2023-11-10",
-        itens: "5000 Panfletos Couché 90g",
-        valor_total: 175.00
-      },
-      {
-        data: "2024-02-15",
-        itens: "1000 Cartões de Visita",
-        valor_total: 85.00
-      }
-    ],
-    history: [
-      { isCustomer: true, text: "Olá, gostaria de saber o preço para 5000 panfletos.", timestamp: "14:20" },
-      { isCustomer: false, text: "Boa tarde Guilherme! Vou verificar agora.", timestamp: "14:25" }
-    ]
+    historico_compras: [],
+    history: []
   },
   {
-    id: "1776056451480",
-    name: "Ana Beatriz Souza",
-    initials: "AB",
-    empresa: "Livraria Saber",
-    cpf_cnpj: "12345678000199",
-    telefone: "11988887777",
-    email: "contato@livrariasaber.com.br",
-    endereco: "Av. Paulista, 1000 - Bela Vista",
+    id: "1776056784415",
+    name: "Laura Alcântara",
+    initials: "LA",
+    empresa: "Lucas venda s",
+    cpf_cnpj: "5531991151126",
+    telefone: "333949464949",
+    email: "hsjababa",
+    endereco: "Haisnsksn",
     itens: [
-      { 
-        produto: "Marcadores de Página", 
-        descricao: "1000 unidades, verniz total frente", 
-        preco_concorrente: "R$ 120,00" 
-      }
+      { produto: "Bloco", descricao: "Sbnsbsbsh", preco_concorrente: "1000" }
     ],
-    probabilidade: 45,
-    observacoes: "Primeira cotação deste cliente.",
-    vendedor: "Marcelo Almeida",
-    status: 'enviado',
+    probabilidade: 8,
+    observacoes: "Snaibbs (cliente exigente)",
+    vendedor: "Marcelo Almeida Barbosa",
+    status: 'aguardando',
+    enriched: {
+      capital: "R$ 20.000,00",
+      fundacao: "Aprox. 2 anos"
+    },
+    historico_compras: [],
+    history: []
+  },
+  {
+    id: "1776065915833",
+    name: "Fuuuuuu",
+    initials: "FU",
+    empresa: "Yoy3qccf",
+    cpf_cnpj: "70219798605",
+    telefone: "33997054462",
+    email: "a njfwwggg",
+    endereco: "Tytsshjjjj",
+    itens: [
+      { produto: "Bloco", descricao: "Fhf11wss", preco_concorrente: "100" }
+    ],
+    probabilidade: 8,
+    observacoes: "Rrtxxvkjewdfg que eu l",
+    vendedor: "Guilherme Alcantara Ferreira",
+    status: 'aguardando',
     enriched: {
       capital: "R$ 10.000,00",
-      fundacao: "20/01/2022"
+      fundacao: "Recém aberta"
+    },
+    historico_compras: [],
+    history: []
+  },
+  {
+    id: "1776085330819",
+    name: "Ahabah",
+    initials: "AH",
+    empresa: "uaha",
+    cpf_cnpj: "70219798605",
+    telefone: "46494349461",
+    email: "whhsshbs",
+    endereco: "Syshhshss",
+    itens: [
+      { produto: "Cartão", descricao: "1000 cartões ", preco_concorrente: "250.00" },
+      { produto: "Bloco", descricao: "10 blocos peguemos ", preco_concorrente: "100" }
+    ],
+    probabilidade: 7,
+    observacoes: "Sbehebz",
+    vendedor: "Valéria Tupy da Fonseca Naves",
+    status: 'aguardando',
+    enriched: {
+      capital: "R$ 15.000,00",
+      fundacao: "Não informada"
+    },
+    historico_compras: [],
+    history: []
+  },
+  {
+    id: "1776176079646",
+    name: "Thiago Almeida",
+    initials: "TA",
+    empresa: "GD importação",
+    cpf_cnpj: "94680764316",
+    telefone: "3399645810",
+    email: "contatomarceloalmeidabarbosa@gmail.com",
+    endereco: "Teste teste",
+    itens: [
+      { produto: "Cartão", descricao: "100 cartões ", preco_concorrente: "500" }
+    ],
+    probabilidade: 5,
+    observacoes: "Teste teste",
+    vendedor: "Marcelo Almeida Barbosa",
+    status: 'aguardando',
+    enriched: {
+      capital: "R$ 100.000,00",
+      fundacao: "Aprox. 6 anos"
     },
     historico_compras: [],
     history: []
