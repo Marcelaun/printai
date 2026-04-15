@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Sparkles, Send, Bot, MessageSquare, Zap, UserCircle, Loader2 
+  Sparkles, Send, Bot, Zap, UserCircle, Loader2 
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendCopilotMessage } from '../../services/api';
