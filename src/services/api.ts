@@ -1,6 +1,7 @@
 import type { Lead } from '../types/index';
 
-const API_URL = 'http://localhost:3000/api';
+// Puxando a URL do backend de forma segura do .env (ou da Vercel)
+const API_URL = import.meta.env.VITE_API_URL;
 
 export const getLeads = async (): Promise<Lead[]> => {
   const res = await fetch(`${API_URL}/leads`);
