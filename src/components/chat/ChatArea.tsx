@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Building2, User, Mail, UserPlus, UserCheck, AlertCircle, 
+  Building2, User, Mail, UserPlus, UserCheck, 
   Siren, Store, Clock, ChevronRight, ShoppingCart, Search, Loader2
 } from 'lucide-react';
 import type { Lead, LeadStatus } from '../../types/index';
@@ -58,7 +58,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ lead, onStatusChange, onAssumeLead,
     );
   }
 
-  const isBeingAttendedBySomeoneElse = lead.atendido_por && lead.atendido_por !== currentUserName;
   const isBeingAttendedByMe = lead.atendido_por === currentUserName;
 
   // O filtro agora atua sobre os produtos puxados do banco de dados

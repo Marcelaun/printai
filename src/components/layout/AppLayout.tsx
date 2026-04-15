@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Printer, Bell, Search, Settings, User, Loader2, LogOut, 
+  Printer, Bell, Settings, User, Loader2, LogOut, 
   PanelLeftClose, PanelLeft, PanelRightClose, PanelRight 
 } from 'lucide-react';
 import { LeadSidebar } from '../sidebar/LeadSidebar';
